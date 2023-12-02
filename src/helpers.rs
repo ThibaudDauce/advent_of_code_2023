@@ -315,14 +315,12 @@ impl<S: State> WindowHandler for MyWindowHandler<S> {
                 )
                 .unwrap();
             graphics.draw_image((130.0, 530.0), &hat_image);
-        } else {
-            if !self.pause {
-                graphics.clear_screen(Color::from_hex_rgb(0x0f0f23));
-                let last_frame = Instant::now();
-                self.state
-                    .on_draw(&self.timings, &mut self.text_manager, graphics);
-                self.timings.last_frame = last_frame;
-            }
+        } else if !self.pause {
+            graphics.clear_screen(Color::from_hex_rgb(0x0f0f23));
+            let last_frame = Instant::now();
+            self.state
+                .on_draw(&self.timings, &mut self.text_manager, graphics);
+            self.timings.last_frame = last_frame;
         }
 
         // if self.start.elapsed().as_secs() != 0 {

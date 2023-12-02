@@ -1,6 +1,6 @@
-use std::collections::BTreeMap;
+
 use std::time::Duration;
-use std::{collections::HashMap, thread::sleep};
+use std::{thread::sleep};
 
 use helpers::{run, GlowColor, State, TextManager, TextType, Timings, SCREEN_HEIGHT, SCREEN_WIDTH};
 use rusttype::Scale;
@@ -28,7 +28,7 @@ struct MyState {
 impl State for MyState {
     fn on_draw(
         &mut self,
-        timings: &Timings,
+        _timings: &Timings,
         text_manager: &mut TextManager,
         graphics: &mut Graphics2D,
     ) {
@@ -154,7 +154,7 @@ impl State for MyState {
         );
 
         if self.line_index > 10 && self.line_index < self.lines.len() - 10 {
-            for i in 1..6 {
+            for _i in 1..6 {
                 let numbers = &self.results[self.line_index];
                 let first = numbers[0];
                 let last = numbers[numbers.len() - 1];
@@ -179,14 +179,12 @@ impl State for MyState {
                     self.char_index = self.results[self.line_index][0].position;
                 }
             }
+        } else if self.char_index > self.chars[self.line_index].len() {
+            self.line_index += 1;
+            self.char_index = 0;
+            self.sum += first.value * 10 + last.value;
         } else {
-            if self.char_index > self.chars[self.line_index].len() {
-                self.line_index += 1;
-                self.char_index = 0;
-                self.sum += first.value * 10 + last.value;
-            } else {
-                self.char_index += 1;
-            }
+            self.char_index += 1;
         }
 
         if self.line_index < 5 {

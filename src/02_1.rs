@@ -310,7 +310,7 @@ impl MyState {
             Vector2::new(self.column_r, SCREEN_HEIGHT as f32 / 2.0),
             self.games[self.current_game_index][self.current_set_index].red,
         );
-        self.current_set_positions.0 = start.into_iter().zip(end.into_iter()).collect();
+        self.current_set_positions.0 = start.into_iter().zip(end).collect();
 
         // Green
         let start = generate_cube_positions(
@@ -323,7 +323,7 @@ impl MyState {
             Vector2::new(self.column_g, SCREEN_HEIGHT as f32 / 2.0),
             self.games[self.current_game_index][self.current_set_index].green,
         );
-        self.current_set_positions.1 = start.into_iter().zip(end.into_iter()).collect();
+        self.current_set_positions.1 = start.into_iter().zip(end).collect();
 
         // Blue
         let start = generate_cube_positions(
@@ -336,7 +336,7 @@ impl MyState {
             Vector2::new(self.column_b, SCREEN_HEIGHT as f32 / 2.0),
             self.games[self.current_game_index][self.current_set_index].blue,
         );
-        self.current_set_positions.2 = start.into_iter().zip(end.into_iter()).collect();
+        self.current_set_positions.2 = start.into_iter().zip(end).collect();
     }
 }
 
