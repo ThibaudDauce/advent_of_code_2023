@@ -143,36 +143,39 @@ impl TextManager {
                                         y + bounding_box.min.y as u32,
                                     );
 
-                                    let aA = pixel.0[3] as f32;
-                                    let aB = v * 255.0;
+                                    let a_a = pixel.0[3] as f32;
+                                    let a_b = v * 255.0;
 
-                                    let rA = pixel.0[0] as f32;
-                                    let gA = pixel.0[1] as f32;
-                                    let bA = pixel.0[2] as f32;
+                                    let r_a = pixel.0[0] as f32;
+                                    let g_a = pixel.0[1] as f32;
+                                    let b_a = pixel.0[2] as f32;
 
-                                    let rB = match color {
+                                    let r_b = match color {
                                         GlowColor::Red => 239.0,
                                         _ => 255.0,
                                     };
-                                    let gB = match color {
+                                    let g_b = match color {
                                         GlowColor::Red => 68.0,
                                         _ => 255.0,
                                     };
-                                    let bB = match color {
+                                    let b_b = match color {
                                         GlowColor::White => 255.0,
                                         GlowColor::Gold => 102.0,
                                         GlowColor::Red => 68.0,
                                     };
 
-                                    let aOut = aA + (aB * (255.0 - aA) / 255.0);
-                                    let rOut = (rA * aA + rB * aB * (255.0 - aA) / 255.0) / aOut;
-                                    let gOut = (gA * aA + gB * aB * (255.0 - aA) / 255.0) / aOut;
-                                    let bOut = (bA * aA + bB * aB * (255.0 - aA) / 255.0) / aOut;
+                                    let a_out = a_a + (a_b * (255.0 - a_a) / 255.0);
+                                    let r_out =
+                                        (r_a * a_a + r_b * a_b * (255.0 - a_a) / 255.0) / a_out;
+                                    let g_out =
+                                        (g_a * a_a + g_b * a_b * (255.0 - a_a) / 255.0) / a_out;
+                                    let b_out =
+                                        (b_a * a_a + b_b * a_b * (255.0 - a_a) / 255.0) / a_out;
 
-                                    pixel.0[0] = rOut as u8;
-                                    pixel.0[1] = gOut as u8;
-                                    pixel.0[2] = bOut as u8;
-                                    pixel.0[3] = aOut as u8;
+                                    pixel.0[0] = r_out as u8;
+                                    pixel.0[1] = g_out as u8;
+                                    pixel.0[2] = b_out as u8;
+                                    pixel.0[3] = a_out as u8;
                                 });
                             }
                         }
