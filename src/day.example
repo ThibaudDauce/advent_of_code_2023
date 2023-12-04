@@ -1,0 +1,26 @@
+use helpers::{run, State, TextManager, Timings};
+use speedy2d::Graphics2D;
+
+mod helpers;
+
+struct MyState {}
+
+impl State for MyState {
+    fn on_draw(
+        &mut self,
+        _timings: &Timings,
+        _text_manager: &mut TextManager,
+        _graphics: &mut Graphics2D,
+    ) {
+    }
+}
+
+fn main() {
+    run(MyState {});
+}
+
+fn input() -> &'static str {
+    "
+
+    "
+}

@@ -6,19 +6,21 @@ use std::process::Command;
 use std::time::Instant;
 
 use image::imageops::blur;
-use image::{DynamicImage, EncodableLayout, Rgba};
+use image::{DynamicImage, EncodableLayout, GenericImage, ImageBuffer, Rgba};
 use rusttype::{point, Font, PositionedGlyph, Scale, VMetrics};
 use speedy2d::color::Color;
 use speedy2d::dimen::Vector2;
 use speedy2d::image::{ImageDataType, ImageHandle, ImageSmoothingMode};
+use speedy2d::shape::Rectangle;
 use speedy2d::window::{KeyScancode, VirtualKeyCode, WindowHandler, WindowHelper};
 use speedy2d::{Graphics2D, Window};
 
 pub(crate) const SCREEN_WIDTH: u32 = 810;
 pub(crate) const SCREEN_HEIGHT: u32 = 1440;
+pub(crate) const FONT_RATIO: f32 = 427.0 / 1000.0;
 
 const RUST_IMAGE_SIZE: f32 = 405.0;
-const TEXT_MARGIN: u32 = 30;
+pub(crate) const TEXT_MARGIN: u32 = 30;
 
 #[derive(Debug)]
 pub(crate) struct GlyphSize {
@@ -26,10 +28,14 @@ pub(crate) struct GlyphSize {
     width: u32,
 }
 
+type GlyphsCache = HashMap<(String, u32), (VMetrics, GlyphSize, Vec<PositionedGlyph<'static>>)>;
+type RawImageCache = HashMap<(String, u32, TextType), ImageBuffer<Rgba<u8>, Vec<u8>>>;
+
 pub(crate) struct TextManager {
     pub(crate) font: Font<'static>,
-    pub(crate) glyphs: HashMap<(String, u32), (VMetrics, GlyphSize, Vec<PositionedGlyph<'static>>)>,
-    images: HashMap<(String, u32, TextType), ImageHandle>,
+    pub(crate) glyphs: GlyphsCache,
+    pub(crate) images: HashMap<(String, u32, TextType), ImageHandle>,
+    pub(crate) raw_images: RawImageCache,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -46,55 +52,58 @@ pub(crate) enum TextType {
 }
 
 impl TextManager {
-    pub(crate) fn draw_text(
-        &mut self,
-        graphics: &mut Graphics2D,
+    pub(crate) fn get_glyph_info<'a>(
+        glyphs_cache: &'a mut GlyphsCache,
+        font: &Font<'static>,
+        text: String,
+        size: u32,
+    ) -> &'a mut (VMetrics, GlyphSize, Vec<PositionedGlyph<'static>>) {
+        glyphs_cache.entry((text.clone(), size)).or_insert_with(|| {
+            let metrics = font.v_metrics(Scale::uniform(size as f32));
+            let glyphs: Vec<_> = font
+                .layout(
+                    &text,
+                    Scale::uniform(size as f32),
+                    point(TEXT_MARGIN as f32, TEXT_MARGIN as f32 + metrics.ascent),
+                )
+                .collect();
+
+            let glyphs_height = (metrics.ascent - metrics.descent).ceil() as u32;
+            let glyphs_width = {
+                let min_x = glyphs
+                    .first()
+                    .map(|g| g.pixel_bounding_box().unwrap().min.x)
+                    .unwrap();
+                let max_x = glyphs
+                    .last()
+                    .map(|g| g.pixel_bounding_box().unwrap().max.x)
+                    .unwrap();
+                (max_x - min_x) as u32
+            };
+
+            (
+                metrics,
+                GlyphSize {
+                    height: glyphs_height,
+                    width: glyphs_width,
+                },
+                glyphs,
+            )
+        })
+    }
+
+    pub(crate) fn get_raw_image<'a>(
+        raw_image_cache: &'a mut RawImageCache,
+        glyphs_cache: &mut GlyphsCache,
+        font: &Font<'static>,
+        text: String,
         size: u32,
         text_type: TextType,
-        position: (f32, f32),
-        text: String,
-    ) {
-        if text.is_empty() {
-            return;
-        }
-
+    ) -> &'a ImageBuffer<Rgba<u8>, Vec<u8>> {
         let (_metrics, glyph_size, glyphs) =
-            self.glyphs.entry((text.clone(), size)).or_insert_with(|| {
-                let metrics = self.font.v_metrics(Scale::uniform(size as f32));
-                let glyphs: Vec<_> = self
-                    .font
-                    .layout(
-                        &text,
-                        Scale::uniform(size as f32),
-                        point(TEXT_MARGIN as f32, TEXT_MARGIN as f32 + metrics.ascent),
-                    )
-                    .collect();
+            Self::get_glyph_info(glyphs_cache, font, text.clone(), size);
 
-                let glyphs_height = (metrics.ascent - metrics.descent).ceil() as u32;
-                let glyphs_width = {
-                    let min_x = glyphs
-                        .first()
-                        .map(|g| g.pixel_bounding_box().unwrap().min.x)
-                        .unwrap();
-                    let max_x = glyphs
-                        .last()
-                        .map(|g| g.pixel_bounding_box().unwrap().max.x)
-                        .unwrap();
-                    (max_x - min_x) as u32
-                };
-
-                (
-                    metrics,
-                    GlyphSize {
-                        height: glyphs_height,
-                        width: glyphs_width,
-                    },
-                    glyphs,
-                )
-            });
-
-        let image_handle = self
-            .images
+        raw_image_cache
             .entry((text, size, text_type))
             .or_insert_with(|| {
                 let mut image = DynamicImage::new_rgba8(
@@ -129,7 +138,7 @@ impl TextManager {
                     }
                 }
 
-                let image = match text_type {
+                match text_type {
                     TextType::Gray => image,
                     TextType::Glow(color) => {
                         let mut image_blur = blur(&image, 8.0);
@@ -182,16 +191,40 @@ impl TextManager {
 
                         image_blur
                     }
-                };
+                }
+            })
+    }
 
+    pub(crate) fn draw_text(
+        &mut self,
+        graphics: &mut Graphics2D,
+        size: u32,
+        text_type: TextType,
+        position: (f32, f32),
+        text: String,
+    ) {
+        if text.is_empty() {
+            return;
+        }
+
+        let image = Self::get_raw_image(
+            &mut self.raw_images,
+            &mut self.glyphs,
+            &self.font,
+            text.clone(),
+            size,
+            text_type,
+        );
+
+        let image_handle = self
+            .images
+            .entry((text.clone(), size, text_type))
+            .or_insert_with(|| {
                 let image_handle = graphics
                     .create_image_from_raw_pixels(
                         ImageDataType::RGBA,
                         ImageSmoothingMode::NearestNeighbor,
-                        (
-                            glyph_size.width + TEXT_MARGIN * 2,
-                            glyph_size.height + TEXT_MARGIN * 2,
-                        ),
+                        image.dimensions(),
                         image.as_bytes(),
                     )
                     .unwrap();
@@ -201,8 +234,8 @@ impl TextManager {
 
         graphics.draw_image(
             (
-                position.0 - (glyph_size.width + TEXT_MARGIN * 2) as f32 / 2.0,
-                position.1 - (glyph_size.height + TEXT_MARGIN * 2) as f32 / 2.0,
+                position.0 - image_handle.size().x as f32 / 2.0,
+                position.1 - image_handle.size().y as f32 / 2.0,
             ),
             image_handle,
         );
@@ -221,6 +254,7 @@ pub(crate) struct MyWindowHandler<S: State> {
     timings: Timings,
     pause: bool,
     splashscreen: bool,
+    on_start_called: bool,
 }
 
 pub(crate) struct Timings {
@@ -249,6 +283,11 @@ impl<S: State> WindowHandler for MyWindowHandler<S> {
     }
 
     fn on_draw(&mut self, helper: &mut WindowHelper, graphics: &mut Graphics2D) {
+        if !self.on_start_called {
+            self.state.on_start(graphics);
+            self.on_start_called = true;
+        }
+
         self.frame += 1;
 
         if self.splashscreen {
@@ -352,6 +391,8 @@ pub(crate) trait State: Sized {
         text_manager: &mut TextManager,
         graphics: &mut Graphics2D,
     );
+
+    fn on_start(&mut self, _graphics: &mut Graphics2D) {}
 }
 
 pub(crate) fn run<S: State + 'static>(state: S) {
@@ -391,7 +432,9 @@ pub(crate) fn run<S: State + 'static>(state: S) {
             font,
             glyphs: HashMap::new(),
             images: HashMap::new(),
+            raw_images: HashMap::new(),
         },
+        on_start_called: false,
     };
 
     window.run_loop(my_window);
@@ -412,23 +455,32 @@ fn prog() -> (String, String) {
     (day.to_string(), part.to_string())
 }
 
-pub(crate) fn square_at_position(center: Vector2<f32>, width: f32) -> [Vector2<f32>; 4] {
+pub(crate) fn square_at_position(center: Vector2<f32>, size: f32) -> [Vector2<f32>; 4] {
+    // Here size is the "radius" of the square (so times 2 to have the full width and height)
+    rect_at_position(center, size * 2.0, size * 2.0)
+}
+
+pub(crate) fn rect_at_position(center: Vector2<f32>, width: f32, height: f32) -> [Vector2<f32>; 4] {
     [
-        Vector2::new(center.x - width, center.y - width),
-        Vector2::new(center.x + width, center.y - width),
-        Vector2::new(center.x + width, center.y + width),
-        Vector2::new(center.x - width, center.y + width),
+        Vector2::new(center.x - width / 2.0, center.y - height / 2.0),
+        Vector2::new(center.x + width / 2.0, center.y - height / 2.0),
+        Vector2::new(center.x + width / 2.0, center.y + height / 2.0),
+        Vector2::new(center.x - width / 2.0, center.y + height / 2.0),
     ]
 }
 
 pub(crate) fn rotate_rect(rect: &mut [Vector2<f32>; 4], center: Vector2<f32>, rotation_rad: f32) {
-    rect[0] = translate_vec(rect[0], center, rotation_rad);
-    rect[1] = translate_vec(rect[1], center, rotation_rad);
-    rect[2] = translate_vec(rect[2], center, rotation_rad);
-    rect[3] = translate_vec(rect[3], center, rotation_rad);
+    rect[0] = rotate_vec(rect[0], center, rotation_rad);
+    rect[1] = rotate_vec(rect[1], center, rotation_rad);
+    rect[2] = rotate_vec(rect[2], center, rotation_rad);
+    rect[3] = rotate_vec(rect[3], center, rotation_rad);
 }
 
-fn translate_vec(vec: Vector2<f32>, center: Vector2<f32>, rotation_rad: f32) -> Vector2<f32> {
+pub(crate) fn rotate_vec(
+    vec: Vector2<f32>,
+    center: Vector2<f32>,
+    rotation_rad: f32,
+) -> Vector2<f32> {
     // (x·cosθ−y·sinθ ,x·sinθ+y·cosθ)
 
     Vector2::new(
@@ -438,6 +490,31 @@ fn translate_vec(vec: Vector2<f32>, center: Vector2<f32>, rotation_rad: f32) -> 
             + (vec.x - center.x) * rotation_rad.sin()
             + (vec.y - center.y) * rotation_rad.cos(),
     )
+}
+
+pub(crate) fn draw_image_rotated(
+    graphics: &mut Graphics2D,
+    position: Vector2<f32>,
+    image: &ImageHandle,
+    rot_rad: f32,
+) {
+    let mut rect = rect_at_position(position, image.size().x as f32, image.size().y as f32);
+    rotate_rect(&mut rect, position, rot_rad);
+
+    let image_coords_normalized = Rectangle::new(Vector2::ZERO, Vector2::new(1.0, 1.0));
+    let color = Color::WHITE;
+
+    graphics.draw_quad_image_tinted_four_color(
+        [rect[0], rect[1], rect[2], rect[3]],
+        [color, color, color, color],
+        [
+            *image_coords_normalized.top_left(),
+            image_coords_normalized.top_right(),
+            *image_coords_normalized.bottom_right(),
+            image_coords_normalized.bottom_left(),
+        ],
+        &image,
+    );
 }
 
 pub(crate) fn translate_rect(rect: &mut [Vector2<f32>; 4], translation: Vector2<f32>) {
