@@ -21,14 +21,14 @@ const RUST_IMAGE_SIZE: f32 = 405.0;
 const TEXT_MARGIN: u32 = 30;
 
 #[derive(Debug)]
-struct GlyphSize {
+pub(crate) struct GlyphSize {
     height: u32,
     width: u32,
 }
 
 pub(crate) struct TextManager {
     pub(crate) font: Font<'static>,
-    glyphs: HashMap<(String, u32), (VMetrics, GlyphSize, Vec<PositionedGlyph<'static>>)>,
+    pub(crate) glyphs: HashMap<(String, u32), (VMetrics, GlyphSize, Vec<PositionedGlyph<'static>>)>,
     images: HashMap<(String, u32, TextType), ImageHandle>,
 }
 
@@ -209,6 +209,10 @@ impl TextManager {
     }
 }
 
+pub(crate) fn ease_in_cube_ease_out_quad(x: f32) -> f32 {
+    x * x
+}
+
 pub(crate) struct MyWindowHandler<S: State> {
     state: S,
     prog_name: (String, String),
@@ -236,6 +240,8 @@ impl<S: State> WindowHandler for MyWindowHandler<S> {
         if let Some(VirtualKeyCode::Space) = virtual_key_code {
             if self.splashscreen {
                 self.splashscreen = false;
+                self.timings.start = Instant::now();
+                self.timings.last_frame = Instant::now();
             } else {
                 self.pause = !self.pause;
             }
@@ -446,4 +452,12 @@ pub(crate) fn translate_rect(rect: &mut [Vector2<f32>; 4], translation: Vector2<
 
     rect[3].x += translation.x;
     rect[3].y += translation.y;
+}
+
+pub(crate) fn interp(start: f32, end: f32, percentage: f32) -> f32 {
+    if start > end {
+        start - (start - end) * percentage
+    } else {
+        start + (end - start) * percentage
+    }
 }
