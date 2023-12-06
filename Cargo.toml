@@ -31,6 +31,10 @@ path = "src/03_2.rs"
 name = "04_1"
 path = "src/04_1.rs"
 
+[[bin]]
+name = "04_2"
+path = "src/04_2.rs"
+
 [dependencies]
 image = "0.24.7"
 rand = "0.8.5"
