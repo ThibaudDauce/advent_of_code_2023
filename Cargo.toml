@@ -39,8 +39,13 @@ path = "src/04_2.rs"
 name = "05_1"
 path = "src/05_1.rs"
 
+[[bin]]
+name = "05_2"
+path = "src/05_2.rs"
+
 [dependencies]
 image = "0.24.7"
+itertools = "0.12.0"
 rand = "0.8.5"
 rusttype = "0.9.3"
 speedy2d = "2.0.0"
