@@ -203,6 +203,18 @@ impl TextManager {
         position: (f32, f32),
         text: String,
     ) {
+        self.draw_text_align(graphics, size, text_type, position, text, Align::Center)
+    }
+
+    pub(crate) fn draw_text_align(
+        &mut self,
+        graphics: &mut Graphics2D,
+        size: u32,
+        text_type: TextType,
+        position: (f32, f32),
+        text: String,
+        align: Align,
+    ) {
         if text.is_empty() {
             return;
         }
@@ -234,12 +246,22 @@ impl TextManager {
 
         graphics.draw_image(
             (
-                position.0 - image_handle.size().x as f32 / 2.0,
+                match align {
+                    Align::Right => position.0 - image_handle.size().x as f32,
+                    Align::Center => position.0 - image_handle.size().x as f32 / 2.0,
+                    Align::Left => position.0,
+                },
                 position.1 - image_handle.size().y as f32 / 2.0,
             ),
             image_handle,
         );
     }
+}
+
+pub(crate) enum Align {
+    Center,
+    Left,
+    Right,
 }
 
 pub(crate) fn ease_in_cube_ease_out_quad(x: f32) -> f32 {
@@ -453,6 +475,10 @@ fn prog() -> (String, String) {
     let (day, part) = prog_name.split_once('_').unwrap();
 
     (day.to_string(), part.to_string())
+}
+
+pub(crate) fn array_to_rectangle(array: [Vector2<f32>; 4]) -> Rectangle {
+    Rectangle::new(array[0], array[2])
 }
 
 pub(crate) fn square_at_position(center: Vector2<f32>, size: f32) -> [Vector2<f32>; 4] {
